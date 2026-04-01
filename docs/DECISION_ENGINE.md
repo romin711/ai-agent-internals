@@ -1,4 +1,4 @@
-# README_SCORING
+# DECISION_ENGINE
 
 ## 1) What "Matching, Scoring, Decision" Means In This Repo
 
@@ -260,7 +260,7 @@ pub fn authorize(
 - Python scoring has no semantic embeddings, no confidence calibration, and no recency/context weighting.
 - Python permission denial inference is simplistic and currently bash-name-based.
 - Python command/tool execution messages are mirrored stubs, not side-effect execution.
-- Rust has richer runtime decisions, but exact parity with the historical TS system is still tracked as a gap in PARITY.md.
+- Rust has richer runtime decisions, but exact parity with the historical TS system is still tracked as a gap in [analysis/PARITY_ANALYSIS.md](../analysis/PARITY_ANALYSIS.md).
 
 ## 6) Unclear Areas (Explicit)
 
@@ -279,7 +279,7 @@ pub fn authorize(
 
 5. **Rust uses mode-based authorization:** PermissionPolicy.authorize compares permission mode enums without per-tool ACLs. Simple, auditable, and easier to reason about.
 
-6. **No cross-language contract yet:** Python and Rust scoring/authorization logic are conceptually similar but not formally equivalent. Parity gaps exist and are tracked in PARITY.md.
+6. **No cross-language contract yet:** Python and Rust scoring/authorization logic are conceptually similar but not formally equivalent. Parity gaps exist and are tracked in [analysis/PARITY_ANALYSIS.md](../analysis/PARITY_ANALYSIS.md).
 
 ---
 

@@ -1,4 +1,4 @@
-# README_ARCHITECTURE
+# ARCHITECTURE
 
 ## 1) What This Repository Actually Is
 
@@ -200,7 +200,7 @@ More operational in Rust workspace:
 
 - Exact feature parity target between the Python mirror and Rust runtime is not fully codified in one machine-readable contract file.
 - Several Python files (dialogLaunchers.py, ink.py, interactiveHelpers.py, replLauncher.py, projectOnboardingState.py) exist for surface parity but contain little/no active logic in this workspace context.
-- Some Rust behavior breadth versus original TypeScript system is described in PARITY.md, but that file is a narrative audit and not an enforceable compatibility test spec.
+- Some Rust behavior breadth versus original TypeScript system is described in [analysis/PARITY_ANALYSIS.md](../analysis/PARITY_ANALYSIS.md), but that file is a narrative audit and not an enforceable compatibility test spec.
 
 ## Key Takeaways
 

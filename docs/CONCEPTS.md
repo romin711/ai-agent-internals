@@ -1,4 +1,4 @@
-# README_CONCEPTS
+# CONCEPTS
 
 ## 1) Core Idea In Plain Language
 

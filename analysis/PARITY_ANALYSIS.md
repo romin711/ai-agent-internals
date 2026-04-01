@@ -1,232 +1,395 @@
-# PARITY GAP ANALYSIS
+# PARITY GAP ANALYSIS (WORKSPACE EVIDENCE)
 
-Scope: read-only comparison between the original TypeScript source at `/home/bellman/Workspace/claw-code/src/` and the Rust port under `rust/crates/`.
+Scope: examples below are taken only from files in this codespace.
 
-Method: compared feature surfaces, registries, entrypoints, and runtime plumbing only. No TypeScript source was copied.
-
-## Executive summary
-
-The Rust port has a good foundation for:
-- Anthropic API/OAuth basics
-- local conversation/session state
-- a core tool loop
-- MCP stdio/bootstrap support
-- CLAW.md discovery
-- a small but usable built-in tool set
-
-It is **not feature-parity** with the TypeScript CLI.
-
-Largest gaps:
-- **plugins** are effectively absent in Rust
-- **hooks** are parsed but not executed in Rust
-- **CLI breadth** is much narrower in Rust
-- **skills** are local-file only in Rust, without the TS registry/bundled pipeline
-- **assistant orchestration** lacks TS hook-aware orchestration and remote/structured transports
-- **services** beyond core API/OAuth/MCP are mostly missing in Rust
-
----
+Method: each section uses direct snippets from local Rust crates so every claim is traceable to code.
 
 ## tools/
 
-### TS exists
-Evidence:
-- `src/tools/` contains broad tool families including `AgentTool`, `AskUserQuestionTool`, `BashTool`, `ConfigTool`, `FileReadTool`, `FileWriteTool`, `GlobTool`, `GrepTool`, `LSPTool`, `ListMcpResourcesTool`, `MCPTool`, `McpAuthTool`, `ReadMcpResourceTool`, `RemoteTriggerTool`, `ScheduleCronTool`, `SkillTool`, `Task*`, `Team*`, `TodoWriteTool`, `ToolSearchTool`, `WebFetchTool`, `WebSearchTool`.
-- Tool execution/orchestration is split across `src/services/tools/StreamingToolExecutor.ts`, `src/services/tools/toolExecution.ts`, `src/services/tools/toolHooks.ts`, and `src/services/tools/toolOrchestration.ts`.
+### Example: built-in tool registry
 
-### Rust exists
-Evidence:
-- Tool registry is centralized in `rust/crates/tools/src/lib.rs` via `mvp_tool_specs()`.
-- Current built-ins include shell/file/search/web/todo/skill/agent/config/notebook/repl/powershell primitives.
-- Runtime execution is wired through `rust/crates/tools/src/lib.rs` and `rust/crates/runtime/src/conversation.rs`.
+```rust
+name: "bash",
+name: "read_file",
+name: "write_file",
+name: "edit_file",
+name: "glob_search",
+name: "grep_search",
+name: "WebFetch",
+name: "WebSearch",
+name: "TodoWrite",
+name: "Skill",
+name: "Agent",
+name: "ToolSearch",
+name: "NotebookEdit",
+name: "Sleep",
+name: "SendUserMessage",
+name: "Config",
+name: "StructuredOutput",
+name: "REPL",
+```
 
-### Missing or broken in Rust
-- No Rust equivalents for major TS tools such as `AskUserQuestionTool`, `LSPTool`, `ListMcpResourcesTool`, `MCPTool`, `McpAuthTool`, `ReadMcpResourceTool`, `RemoteTriggerTool`, `ScheduleCronTool`, `Task*`, `Team*`, and several workflow/system tools.
-- Rust tool surface is still explicitly an MVP registry, not a parity registry.
-- Rust lacks TS’s layered tool orchestration split.
+### Example: skill tool definition
 
-**Status:** partial core only.
+```rust
+ToolSpec {
+  name: "Skill",
+  description: "Load a local skill definition and its instructions.",
+  input_schema: json!({
+    "type": "object",
+    "properties": {
+      "skill": { "type": "string" },
+      "args": { "type": "string" }
+    },
+    "required": ["skill"],
+    "additionalProperties": false
+  }),
+  required_permission: PermissionMode::ReadOnly,
+}
+```
 
 ---
 
 ## hooks/
 
-### TS exists
-Evidence:
-- Hook command surface under `src/commands/hooks/`.
-- Runtime hook machinery in `src/services/tools/toolHooks.ts` and `src/services/tools/toolExecution.ts`.
-- TS supports `PreToolUse`, `PostToolUse`, and broader hook-driven behaviors configured through settings and documented in `src/skills/bundled/updateConfig.ts`.
+### Example: hook events and runner
 
-### Rust exists
-Evidence:
-- Hook config is parsed and merged in `rust/crates/runtime/src/config.rs`.
-- Hook config can be inspected via Rust config reporting in `rust/crates/commands/src/lib.rs` and `rust/crates/claw-cli/src/main.rs`.
-- Prompt guidance mentions hooks in `rust/crates/runtime/src/prompt.rs`.
+```rust
+pub enum HookEvent {
+  PreToolUse,
+  PostToolUse,
+}
 
-### Missing or broken in Rust
-- No actual hook execution pipeline in `rust/crates/runtime/src/conversation.rs`.
-- No PreToolUse/PostToolUse mutation/deny/rewrite/result-hook behavior.
-- No Rust `/hooks` parity command.
+pub fn run_pre_tool_use(&self, tool_name: &str, tool_input: &str) -> HookRunResult
+pub fn run_post_tool_use(
+  &self,
+  tool_name: &str,
+  tool_input: &str,
+  tool_output: &str,
+  is_error: bool,
+) -> HookRunResult
+```
 
-**Status:** config-only; runtime behavior missing.
+### Example: hook execution is wired into the conversation loop
+
+```rust
+let pre_hook_result = self.hook_runner.run_pre_tool_use(&tool_name, &input);
+if pre_hook_result.is_denied() {
+  let deny_message = format!("PreToolUse hook denied tool `{tool_name}`");
+  ConversationMessage::tool_result(
+    tool_use_id,
+    tool_name,
+    format_hook_message(&pre_hook_result, &deny_message),
+    true,
+  )
+} else {
+  let (mut output, mut is_error) = match self.tool_executor.execute(&tool_name, &input) {
+    Ok(output) => (output, false),
+    Err(error) => (error.to_string(), true),
+  };
+
+  let post_hook_result = self
+    .hook_runner
+    .run_post_tool_use(&tool_name, &input, &output, is_error);
+  if post_hook_result.is_denied() {
+    is_error = true;
+  }
+  ConversationMessage::tool_result(
+    tool_use_id,
+    tool_name,
+    output,
+    is_error,
+  )
+}
+```
+
+### Example: hooks parsed from config
+
+```rust
+Ok(RuntimeHookConfig {
+  pre_tool_use: optional_string_array(hooks, "PreToolUse", "merged settings.hooks")?
+    .unwrap_or_default(),
+  post_tool_use: optional_string_array(hooks, "PostToolUse", "merged settings.hooks")?
+    .unwrap_or_default(),
+})
+```
 
 ---
 
 ## plugins/
 
-### TS exists
-Evidence:
-- Built-in plugin scaffolding in `src/plugins/builtinPlugins.ts` and `src/plugins/bundled/index.ts`.
-- Plugin lifecycle/services in `src/services/plugins/PluginInstallationManager.ts` and `src/services/plugins/pluginOperations.ts`.
-- CLI/plugin command surface under `src/commands/plugin/` and `src/commands/reload-plugins/`.
+### Example: plugin subsystem exists
 
-### Rust exists
-Evidence:
-- No dedicated plugin subsystem appears under `rust/crates/`.
-- Repo-wide Rust references to plugins are effectively absent beyond text/help mentions.
+```rust
+pub enum PluginKind {
+  Builtin,
+  Bundled,
+  External,
+}
 
-### Missing or broken in Rust
-- No plugin loader.
-- No marketplace install/update/enable/disable flow.
-- No `/plugin` or `/reload-plugins` parity.
-- No plugin-provided hook/tool/command/MCP extension path.
+pub struct PluginManifest {
+  pub name: String,
+  pub version: String,
+  pub description: String,
+  pub permissions: Vec<PluginPermission>,
+  pub default_enabled: bool,
+  pub hooks: PluginHooks,
+  pub lifecycle: PluginLifecycle,
+  pub tools: Vec<PluginToolManifest>,
+  pub commands: Vec<PluginCommandManifest>,
+}
+```
 
-**Status:** missing.
+### Example: plugin manager operations
+
+```rust
+pub fn list_installed_plugins(&self) -> Result<Vec<PluginSummary>, PluginError>
+pub fn aggregated_hooks(&self) -> Result<PluginHooks, PluginError>
+pub fn aggregated_tools(&self) -> Result<Vec<PluginTool>, PluginError>
+pub fn install(&mut self, source: &str) -> Result<InstallOutcome, PluginError>
+pub fn enable(&mut self, plugin_id: &str) -> Result<(), PluginError>
+pub fn disable(&mut self, plugin_id: &str) -> Result<(), PluginError>
+pub fn uninstall(&mut self, plugin_id: &str) -> Result<(), PluginError>
+pub fn update(&mut self, plugin_id: &str) -> Result<UpdateOutcome, PluginError>
+```
+
+### Example: plugin slash command and aliases
+
+```rust
+SlashCommandSpec {
+  name: "plugin",
+  aliases: &["plugins", "marketplace"],
+  summary: "Manage Claw Code plugins",
+  argument_hint: Some(
+    "[list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]",
+  ),
+  resume_supported: false,
+}
+```
 
 ---
 
 ## skills/ and CLAW.md discovery
 
-### TS exists
-Evidence:
-- Skill loading/registry pipeline in `src/skills/loadSkillsDir.ts`, `src/skills/bundledSkills.ts`, and `src/skills/mcpSkillBuilders.ts`.
-- Bundled skills under `src/skills/bundled/`.
-- Skills command surface under `src/commands/skills/`.
+### Example: `/skills` command and source roots
 
-### Rust exists
-Evidence:
-- `Skill` tool in `rust/crates/tools/src/lib.rs` resolves and reads local `SKILL.md` files.
-- CLAW.md discovery is implemented in `rust/crates/runtime/src/prompt.rs`.
-- Rust supports `/memory` and `/init` via `rust/crates/commands/src/lib.rs` and `rust/crates/claw-cli/src/main.rs`.
+```rust
+pub fn handle_skills_slash_command(args: Option<&str>, cwd: &Path) -> std::io::Result<String> {
+  match normalize_optional_args(args) {
+    None | Some("list") => {
+      let roots = discover_skill_roots(cwd);
+      let skills = load_skills_from_roots(&roots)?;
+      Ok(render_skills_report(&skills))
+    }
+    Some("-h" | "--help" | "help") => Ok(render_skills_usage(None)),
+    Some(args) => Ok(render_skills_usage(Some(args))),
+  }
+}
 
-### Missing or broken in Rust
-- No bundled skill registry equivalent.
-- No `/skills` command.
-- No MCP skill-builder pipeline.
-- No TS-style live skill discovery/reload/change handling.
-- No comparable session-memory / team-memory integration around skills.
+"  Sources          .codex/skills, .claw/skills, legacy /commands"
+```
 
-**Status:** basic local skill loading only.
+### Example: CLAW instruction file discovery
+
+```rust
+for candidate in [
+  dir.join("CLAW.md"),
+  dir.join("CLAW.local.md"),
+  dir.join(".claw").join("CLAW.md"),
+  dir.join(".claw").join("instructions.md"),
+] {
+  push_context_file(&mut files, candidate)?;
+}
+```
 
 ---
 
 ## cli/
 
-### TS exists
-Evidence:
-- Large command surface under `src/commands/` including `agents`, `hooks`, `mcp`, `memory`, `model`, `permissions`, `plan`, `plugin`, `resume`, `review`, `skills`, `tasks`, and many more.
-- Structured/remote transport stack in `src/cli/structuredIO.ts`, `src/cli/remoteIO.ts`, and `src/cli/transports/*`.
-- CLI handler split in `src/cli/handlers/*`.
+### Example: slash command coverage in current Rust code
 
-### Rust exists
-Evidence:
-- Shared slash command registry in `rust/crates/commands/src/lib.rs`.
-- Rust slash commands currently cover `help`, `status`, `compact`, `model`, `permissions`, `clear`, `cost`, `resume`, `config`, `memory`, `init`, `diff`, `version`, `export`, `session`.
-- Main CLI/repl/prompt handling lives in `rust/crates/claw-cli/src/main.rs`.
+```rust
+const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
+  SlashCommandSpec {
+    name: "help",
+    aliases: &[],
+    summary: "Show available slash commands",
+    argument_hint: None,
+    resume_supported: true,
+  },
+  SlashCommandSpec {
+    name: "skills",
+    aliases: &[],
+    summary: "List available skills",
+    argument_hint: None,
+    resume_supported: true,
+  },
+  SlashCommandSpec {
+    name: "plugin",
+    aliases: &["plugins", "marketplace"],
+    summary: "Manage Claw Code plugins",
+    argument_hint: Some(
+      "[list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]",
+    ),
+    resume_supported: false,
+  },
+];
+```
 
-### Missing or broken in Rust
-- Missing major TS command families: `/agents`, `/hooks`, `/mcp`, `/plugin`, `/skills`, `/plan`, `/review`, `/tasks`, and many others.
-- No Rust equivalent to TS structured IO / remote transport layers.
-- No TS-style handler decomposition for auth/plugins/MCP/agents.
-- JSON prompt mode is improved on this branch, but still not clean transport parity: empirical verification shows tool-capable JSON output can emit human-readable tool-result lines before the final JSON object.
+### Example: prompt mode starts with tools enabled
 
-**Status:** functional local CLI core, much narrower than TS.
+```rust
+CliAction::Prompt {
+  prompt,
+  model,
+  output_format,
+  allowed_tools,
+  permission_mode,
+} => LiveCli::new(model, true, allowed_tools, permission_mode)?
+  .run_turn_with_output(&prompt, output_format)?,
+```
 
 ---
 
 ## assistant/ (agentic loop, streaming, tool calling)
 
-### TS exists
-Evidence:
-- Assistant/session surface at `src/assistant/sessionHistory.ts`.
-- Tool orchestration in `src/services/tools/StreamingToolExecutor.ts`, `src/services/tools/toolExecution.ts`, `src/services/tools/toolOrchestration.ts`.
-- Remote/structured streaming layers in `src/cli/structuredIO.ts` and `src/cli/remoteIO.ts`.
+### Example: loop limit and iteration check
 
-### Rust exists
-Evidence:
-- Core loop in `rust/crates/runtime/src/conversation.rs`.
-- Stream/tool event translation in `rust/crates/claw-cli/src/main.rs`.
-- Session persistence in `rust/crates/runtime/src/session.rs`.
+```rust
+Self {
+  session,
+  api_client,
+  tool_executor,
+  permission_policy,
+  system_prompt,
+  max_iterations: usize::MAX,
+  usage_tracker,
+  hook_runner: HookRunner::from_feature_config(&feature_config),
+}
 
-### Missing or broken in Rust
-- No TS-style hook-aware orchestration layer.
-- No TS structured/remote assistant transport stack.
-- No richer TS assistant/session-history/background-task integration.
-- JSON output path is no longer single-turn only on this branch, but output cleanliness still lags TS transport expectations.
+iterations += 1;
+if iterations > self.max_iterations {
+  return Err(RuntimeError::new(
+    "conversation loop exceeded the maximum number of iterations",
+  ));
+}
+```
 
-**Status:** strong core loop, missing orchestration layers.
+### Example: tool uses are extracted from assistant blocks
+
+```rust
+let pending_tool_uses = assistant_message
+  .blocks
+  .iter()
+  .filter_map(|block| match block {
+    ContentBlock::ToolUse { id, name, input } => {
+      Some((id.clone(), name.clone(), input.clone()))
+    }
+    _ => None,
+  })
+  .collect::<Vec<_>>();
+```
 
 ---
 
 ## services/ (API client, auth, models, MCP)
 
-### TS exists
-Evidence:
-- API services under `src/services/api/*`.
-- OAuth services under `src/services/oauth/*`.
-- MCP services under `src/services/mcp/*`.
-- Additional service layers for analytics, prompt suggestion, session memory, plugin operations, settings sync, policy limits, team memory sync, notifier, voice, and more under `src/services/*`.
+### Example: API surface exports
 
-### Rust exists
-Evidence:
-- Core Anthropic API client in `rust/crates/api/src/{client,error,sse,types}.rs`.
-- OAuth support in `rust/crates/runtime/src/oauth.rs`.
-- MCP config/bootstrap/client support in `rust/crates/runtime/src/{config,mcp,mcp_client,mcp_stdio}.rs`.
-- Usage accounting in `rust/crates/runtime/src/usage.rs`.
-- Remote upstream-proxy support in `rust/crates/runtime/src/remote.rs`.
+```rust
+pub use providers::claw_provider::{ClawApiClient, ClawApiClient as ApiClient, AuthSource};
+pub use providers::openai_compat::{OpenAiCompatClient, OpenAiCompatConfig};
+pub use providers::{
+  detect_provider_kind, max_tokens_for_model, resolve_model_alias, ProviderKind,
+};
+```
 
-### Missing or broken in Rust
-- Most TS service ecosystem beyond core messaging/auth/MCP is absent.
-- No TS-equivalent plugin service layer.
-- No TS-equivalent analytics/settings-sync/policy-limit/team-memory subsystems.
-- No TS-style MCP connection-manager/UI layer.
-- Model/provider ergonomics remain thinner than TS.
+### Example: OAuth request models
 
-**Status:** core foundation exists; broader service ecosystem missing.
+```rust
+pub struct OAuthAuthorizationRequest {
+  pub authorize_url: String,
+  pub client_id: String,
+  pub redirect_uri: String,
+  pub scopes: Vec<String>,
+  pub state: String,
+  pub code_challenge: String,
+  pub code_challenge_method: PkceChallengeMethod,
+  pub extra_params: BTreeMap<String, String>,
+}
+```
+
+### Example: MCP bootstrap transport mapping
+
+```rust
+pub enum McpClientTransport {
+  Stdio(McpStdioTransport),
+  Sse(McpRemoteTransport),
+  Http(McpRemoteTransport),
+  WebSocket(McpRemoteTransport),
+  Sdk(McpSdkTransport),
+  ManagedProxy(McpManagedProxyTransport),
+}
+```
+
+### Example: remote/upstream proxy state
+
+```rust
+pub struct UpstreamProxyBootstrap {
+  pub remote: RemoteSessionContext,
+  pub upstream_proxy_enabled: bool,
+  pub token_path: PathBuf,
+  pub ca_bundle_path: PathBuf,
+  pub system_ca_path: PathBuf,
+  pub token: Option<String>,
+}
+```
 
 ---
 
-## Critical bug status in this worktree
+## current defaults and behavior examples
 
-### Fixed
-- **Prompt mode tools enabled**
-  - `rust/crates/claw-cli/src/main.rs` now constructs prompt mode with `LiveCli::new(model, true, ...)`.
-- **Default permission mode = DangerFullAccess**
-  - Runtime default now resolves to `DangerFullAccess` in `rust/crates/claw-cli/src/main.rs`.
-  - Clap default also uses `DangerFullAccess` in `rust/crates/claw-cli/src/args.rs`.
-  - Init template writes `dontAsk` in `rust/crates/claw-cli/src/init.rs`.
-- **Streaming `{}` tool-input prefix bug**
-  - `rust/crates/claw-cli/src/main.rs` now strips the initial empty object only for streaming tool input, while preserving legitimate `{}` in non-stream responses.
-- **Unlimited max_iterations**
-  - Verified at `rust/crates/runtime/src/conversation.rs` with `usize::MAX`.
+### Example: default permission mode
 
-### Remaining notable parity issue
-- **JSON prompt output cleanliness**
-  - Tool-capable JSON mode now loops, but empirical verification still shows pre-JSON human-readable tool-result output when tools fire.
+```rust
+fn default_permission_mode() -> PermissionMode {
+  env::var("CLAW_PERMISSION_MODE")
+    .ok()
+    .as_deref()
+    .and_then(normalize_permission_mode)
+    .map_or(PermissionMode::DangerFullAccess, permission_mode_from_label)
+}
+```
+
+### Example: clap default permission mode
+
+```rust
+#[arg(long, value_enum, default_value_t = PermissionMode::DangerFullAccess)]
+pub permission_mode: PermissionMode,
+```
+
+### Example: init template writes `dontAsk`
+
+```rust
+const STARTER_CLAW_JSON: &str = concat!(
+  "{\n",
+  "  \"permissions\": {\n",
+  "    \"defaultMode\": \"dontAsk\"\n",
+  "  }\n",
+  "}\n",
+);
+```
+
+---
 
 ## Key Takeaways
 
-1. **Rust MVP is feature-incomplete:** The port prioritizes core loop and permission model, not breadth of tools/services.
-
-2. **Major gaps are plugins, hooks, and services:** Hooks are parsed but not executed; plugins are absent; service ecosystem (analytics, settings-sync, team-memory) is missing.
-
-3. **Tool registry gap is real:** TS has 20+ tool types; Rust has MVP toolset. This is acknowledged as MVP status, not a bug.
-
-4. **Core foundation exists:** Anthropic API, OAuth, MCP, session state, and conversation loop are working. New features can be built on this.
-
-5. **Tests should be consulted:** PARITY.md is a narrative audit. Actual behavior gaps are better tracked in tests and verified via code inspection.
+1. The current Rust workspace includes concrete implementations for tools, hooks, plugins, skills, CLI commands, and service modules.
+2. The strongest evidence is in executable code paths (command parsing, runtime loop, plugin manager, and hook runner), not only docs.
+3. This document now uses only local code examples from this codespace.
 
 ---
 
-**Previous:** See docs/ folder for architecture and flow.
+**Related:** [WORKING_GUIDELINES.md](./WORKING_GUIDELINES.md)
 
 **Back:** [Index](../README.md)

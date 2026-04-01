@@ -77,19 +77,19 @@ These functions implement the key architectural decisions:
   - `build_port_manifest() -> dict[str, int]`
 
 - src/parity_audit.py
-  - `run_parity_audit() -> PurityReport`
+  - `run_parity_audit() -> ParityAuditResult`
 
 ## Rust Operational Surface
 
 **CLI & REPL:**
 - rust/crates/claw-cli/src/main.rs
-  - `fn main() -> Result<()>`
-  - `async fn run(cli: Cli) -> Result<()>`
+  - `fn main()`
+  - `fn run() -> Result<(), Box<dyn std::error::Error>>`
 
 **Conversation Loop:**
 - rust/crates/runtime/src/conversation.rs
   - `impl ConversationRuntime { fn run_turn(&mut self) -> Result<TurnSummary> }`
-  - `fn build_assistant_message(response: &ApiResponse) -> Message`
+  - `fn build_assistant_message(events: Vec<AssistantEvent>) -> Result<(ConversationMessage, Option<TokenUsage>), RuntimeError>`
 
 **Permissions & Hooks:**
 - rust/crates/runtime/src/permissions.rs
@@ -97,17 +97,17 @@ These functions implement the key architectural decisions:
   - `enum PermissionMode { ReadOnly, WorkspaceWrite, DangerFullAccess, Allow }`
 
 - rust/crates/runtime/src/hooks.rs
-  - `pub fn run_pre_tool_use(hook_config: &HookConfig) -> Result<()>`
-  - `pub fn run_post_tool_use(hook_config: &HookConfig) -> Result<()>`
+  - `pub fn run_pre_tool_use(&self, tool_name: &str, tool_input: &str) -> HookRunResult`
+  - `pub fn run_post_tool_use(&self, tool_name: &str, tool_input: &str, tool_output: &str, is_error: bool) -> HookRunResult`
 
 **Tool Registry & Execution:**
 - rust/crates/tools/src/lib.rs
   - `pub fn mvp_tool_specs() -> Vec<ToolSpec>`
-  - `impl GlobalToolRegistry { fn execute(&self, tool_name: &str, input: &str) -> Result<String> }`
+  - `impl GlobalToolRegistry { pub fn execute(&self, name: &str, input: &Value) -> Result<String, String> }`
 
 **Commands:**
 - rust/crates/commands/src/lib.rs
-  - `pub const SLASH_COMMAND_SPECS: &[SlashCommandSpec]`
+  - `const SLASH_COMMAND_SPECS: &[SlashCommandSpec]`
   - `impl SlashCommand { fn parse(input: &str) -> Option<SlashCommand> }`
 
 ## Notes
