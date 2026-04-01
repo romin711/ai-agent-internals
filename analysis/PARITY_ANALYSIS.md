@@ -1,12 +1,12 @@
-# PARITY GAP ANALYSIS (WORKSPACE EVIDENCE)
+# 🔍 PARITY GAP ANALYSIS (WORKSPACE EVIDENCE)
 
-Scope: examples below are taken only from files in this codespace.
+> All examples below are taken only from files in this codespace. Each section uses direct snippets from local Rust crates so every claim is traceable to code.
 
-Method: each section uses direct snippets from local Rust crates so every claim is traceable to code.
+---
 
-## tools/
+## 🔧 `tools/`
 
-### Example: built-in tool registry
+### Built-in Tool Registry
 
 ```rust
 name: "bash",
@@ -29,7 +29,7 @@ name: "StructuredOutput",
 name: "REPL",
 ```
 
-### Example: skill tool definition
+### Skill Tool Definition
 
 ```rust
 ToolSpec {
@@ -50,9 +50,9 @@ ToolSpec {
 
 ---
 
-## hooks/
+## 🪝 `hooks/`
 
-### Example: hook events and runner
+### Hook Events and Runner
 
 ```rust
 pub enum HookEvent {
@@ -70,7 +70,7 @@ pub fn run_post_tool_use(
 ) -> HookRunResult
 ```
 
-### Example: hook execution is wired into the conversation loop
+### Hook Execution Wired Into Conversation Loop
 
 ```rust
 let pre_hook_result = self.hook_runner.run_pre_tool_use(&tool_name, &input);
@@ -103,7 +103,7 @@ if pre_hook_result.is_denied() {
 }
 ```
 
-### Example: hooks parsed from config
+### Hooks Parsed From Config
 
 ```rust
 Ok(RuntimeHookConfig {
@@ -116,9 +116,9 @@ Ok(RuntimeHookConfig {
 
 ---
 
-## plugins/
+## 🔌 `plugins/`
 
-### Example: plugin subsystem exists
+### Plugin Subsystem Structure
 
 ```rust
 pub enum PluginKind {
@@ -140,7 +140,7 @@ pub struct PluginManifest {
 }
 ```
 
-### Example: plugin manager operations
+### Plugin Manager Operations
 
 ```rust
 pub fn list_installed_plugins(&self) -> Result<Vec<PluginSummary>, PluginError>
@@ -153,7 +153,7 @@ pub fn uninstall(&mut self, plugin_id: &str) -> Result<(), PluginError>
 pub fn update(&mut self, plugin_id: &str) -> Result<UpdateOutcome, PluginError>
 ```
 
-### Example: plugin slash command and aliases
+### Plugin Slash Command and Aliases
 
 ```rust
 SlashCommandSpec {
@@ -169,9 +169,9 @@ SlashCommandSpec {
 
 ---
 
-## skills/ and CLAW.md discovery
+## 🎯 `skills/` and `CLAW.md` Discovery
 
-### Example: `/skills` command and source roots
+### `/skills` Command and Source Roots
 
 ```rust
 pub fn handle_skills_slash_command(args: Option<&str>, cwd: &Path) -> std::io::Result<String> {
@@ -189,7 +189,7 @@ pub fn handle_skills_slash_command(args: Option<&str>, cwd: &Path) -> std::io::R
 "  Sources          .codex/skills, .claw/skills, legacy /commands"
 ```
 
-### Example: CLAW instruction file discovery
+### CLAW Instruction File Discovery
 
 ```rust
 for candidate in [
@@ -204,9 +204,9 @@ for candidate in [
 
 ---
 
-## cli/
+## 🖥️ `cli/`
 
-### Example: slash command coverage in current Rust code
+### Slash Command Coverage in Current Rust Code
 
 ```rust
 const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
@@ -236,7 +236,7 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
 ];
 ```
 
-### Example: prompt mode starts with tools enabled
+### Prompt Mode Starts With Tools Enabled
 
 ```rust
 CliAction::Prompt {
@@ -251,9 +251,9 @@ CliAction::Prompt {
 
 ---
 
-## assistant/ (agentic loop, streaming, tool calling)
+## 🤖 `assistant/` (Agentic Loop, Streaming, Tool Calling)
 
-### Example: loop limit and iteration check
+### Loop Limit and Iteration Check
 
 ```rust
 Self {
@@ -275,7 +275,7 @@ if iterations > self.max_iterations {
 }
 ```
 
-### Example: tool uses are extracted from assistant blocks
+### Tool Uses Extracted From Assistant Blocks
 
 ```rust
 let pending_tool_uses = assistant_message
@@ -292,9 +292,9 @@ let pending_tool_uses = assistant_message
 
 ---
 
-## services/ (API client, auth, models, MCP)
+## 🌐 `services/` (API Client, Auth, Models, MCP)
 
-### Example: API surface exports
+### API Surface Exports
 
 ```rust
 pub use providers::claw_provider::{ClawApiClient, ClawApiClient as ApiClient, AuthSource};
@@ -304,7 +304,7 @@ pub use providers::{
 };
 ```
 
-### Example: OAuth request models
+### OAuth Request Models
 
 ```rust
 pub struct OAuthAuthorizationRequest {
@@ -319,7 +319,7 @@ pub struct OAuthAuthorizationRequest {
 }
 ```
 
-### Example: MCP bootstrap transport mapping
+### MCP Bootstrap Transport Mapping
 
 ```rust
 pub enum McpClientTransport {
@@ -332,7 +332,7 @@ pub enum McpClientTransport {
 }
 ```
 
-### Example: remote/upstream proxy state
+### Remote/Upstream Proxy State
 
 ```rust
 pub struct UpstreamProxyBootstrap {
@@ -347,9 +347,9 @@ pub struct UpstreamProxyBootstrap {
 
 ---
 
-## current defaults and behavior examples
+## ⚙️ Current Defaults and Behavior Examples
 
-### Example: default permission mode
+### Default Permission Mode
 
 ```rust
 fn default_permission_mode() -> PermissionMode {
@@ -361,14 +361,14 @@ fn default_permission_mode() -> PermissionMode {
 }
 ```
 
-### Example: clap default permission mode
+### Clap Default Permission Mode
 
 ```rust
 #[arg(long, value_enum, default_value_t = PermissionMode::DangerFullAccess)]
 pub permission_mode: PermissionMode,
 ```
 
-### Example: init template writes `dontAsk`
+### Init Template Writes `dontAsk`
 
 ```rust
 const STARTER_CLAW_JSON: &str = concat!(
@@ -382,14 +382,14 @@ const STARTER_CLAW_JSON: &str = concat!(
 
 ---
 
-## Key Takeaways
+## 📌 Key Takeaways
 
-1. The current Rust workspace includes concrete implementations for tools, hooks, plugins, skills, CLI commands, and service modules.
-2. The strongest evidence is in executable code paths (command parsing, runtime loop, plugin manager, and hook runner), not only docs.
-3. This document now uses only local code examples from this codespace.
+1. **Concrete implementations exist** — The current Rust workspace includes concrete implementations for tools, hooks, plugins, skills, CLI commands, and service modules.
+2. **Executable code paths are the strongest evidence** — Command parsing, runtime loop, plugin manager, and hook runner are all operational.
+3. **All examples are local** — This document uses only local code examples from this codespace.
 
 ---
 
 **Related:** [WORKING_GUIDELINES.md](./WORKING_GUIDELINES.md)
 
-**Back:** [Index](../README.md)
+**↑ Back:** [Index](../README.md)

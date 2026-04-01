@@ -1,10 +1,12 @@
-# CLAW.md (WORKSPACE EVIDENCE)
+# 📋 WORKING GUIDELINES (WORKSPACE EVIDENCE)
 
-Scope: examples below are copied from files in this codespace only.
+> All examples below are copied from files in this codespace only.
 
-## detected stack
+---
 
-### Example: Rust workspace root
+## 🔍 Detected Stack
+
+### Rust Workspace Root
 
 ```toml
 [workspace]
@@ -16,7 +18,7 @@ version = "0.1.0"
 edition = "2021"
 ```
 
-### Example: repository detection marks Rust and other surfaces
+### Repository Detection Marks Rust and Other Surfaces
 
 ```rust
 RepoDetection {
@@ -34,9 +36,9 @@ RepoDetection {
 
 ---
 
-## verification
+## ✅ Verification
 
-### Example: contributor verification commands
+### Contributor Verification Commands
 
 ```md
 cargo fmt --all --check
@@ -45,7 +47,7 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-### Example: workspace quick-start commands
+### Workspace Quick-Start Commands
 
 ```bash
 cd rust/
@@ -54,9 +56,9 @@ cargo build --release
 
 ---
 
-## repository shape
+## 📁 Repository Shape
 
-### Example: crates present in this workspace
+### Crates Present in This Workspace
 
 ```text
 rust/crates/
@@ -69,7 +71,7 @@ rust/crates/
   tools/
 ```
 
-### Example: source and test surfaces are present
+### Source and Test Surfaces Are Present
 
 ```text
 src/
@@ -78,16 +80,16 @@ tests/test_porting_workspace.py
 
 ---
 
-## working agreement
+## 🤝 Working Agreement
 
-### Example: generated init guidance includes the same policy text
+### Generated Init Guidance Includes Policy Text
 
 ```rust
 lines.push("- Keep shared defaults in `.claw.json`; reserve `.claw/settings.local.json` for machine-local overrides.".to_string());
 lines.push("- Do not overwrite existing `CLAW.md` content automatically; update it intentionally when repo workflows change.".to_string());
 ```
 
-### Example: init writes baseline config and gitignore entries
+### Init Writes Baseline Config and Gitignore Entries
 
 ```rust
 const STARTER_CLAW_JSON: &str = concat!(
@@ -101,7 +103,7 @@ const STARTER_CLAW_JSON: &str = concat!(
 const GITIGNORE_ENTRIES: [&str; 2] = [".claw/settings.local.json", ".claw/sessions/"];
 ```
 
-### Example: init does not overwrite existing files
+### Init Does Not Overwrite Existing Files
 
 ```rust
 fn write_file_if_missing(path: &Path, content: &str) -> Result<InitStatus, std::io::Error> {
@@ -115,14 +117,14 @@ fn write_file_if_missing(path: &Path, content: &str) -> Result<InitStatus, std::
 
 ---
 
-## Key Takeaways
+## 📌 Key Takeaways
 
-1. The Rust workspace, command flow, and verification workflow are directly represented in local files.
-2. Guidance text in this repo is generated from real code in the init path, not separate manual docs only.
-3. `src/`, `tests/`, and `rust/` are all discoverable surfaces in the repository and in detection logic.
+1. **Local files are the ground truth** — The Rust workspace, command flow, and verification workflow are directly represented in local files.
+2. **Init code generates guidance** — Guidance text in this repo is generated from real code in the init path, not separate manual docs only.
+3. **All surfaces are discoverable** — `src/`, `tests/`, and `rust/` are all discoverable surfaces in the repository and in detection logic.
 
 ---
 
 **Related:** [PARITY_ANALYSIS.md](./PARITY_ANALYSIS.md)
 
-**Back:** [Index](../README.md)
+**↑ Back:** [Index](../README.md)
