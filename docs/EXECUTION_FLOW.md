@@ -1,40 +1,57 @@
-# EXECUTION_FLOW
+# ⚙️ EXECUTION FLOW
 
-## 1) End-to-End Execution Flow (Python CLI Mirror)
+> Concrete step-by-step runtime path for `python -m src.main ...` commands — from CLI invocation to session persisted state.
 
-This is the concrete runtime flow for python -m src.main ... commands.
+---
 
-## 2) Step-by-Step Path
+## 1 · End-to-End Execution Flow (Python CLI Mirror)
 
-### Step 1: Process starts
+This is the concrete runtime flow for `python -m src.main ...` commands.
 
-- File: src/main.py
-- Function: main(argv)
-- Action:
-  - Calls build_parser()
-  - Parses subcommand and args
-  - Builds manifest once via build_port_manifest()
+---
 
-### Step 2: Subcommand dispatch
+## 2 · Step-by-Step Path
 
-- File: src/main.py
-- Function: main(argv)
-- Dispatch examples:
-  - summary -> QueryEnginePort(manifest).render_summary()
-  - manifest -> manifest.to_markdown()
-  - commands/tools -> get_commands/get_tools or render indexes
-  - route -> PortRuntime().route_prompt(...)
-  - bootstrap -> PortRuntime().bootstrap_session(...)
-  - turn-loop -> PortRuntime().run_turn_loop(...)
-  - exec-command/exec-tool -> execute_command/execute_tool
-  - setup-report -> run_setup()
-  - command-graph -> build_command_graph()
-  - tool-pool -> assemble_tool_pool()
+### Step 1 — Process Starts
 
-### Step 3: Prompt routing (matching)
+| | |
+|---|---|
+| **File** | `src/main.py` |
+| **Function** | `main(argv)` |
+| **Actions** | Calls `build_parser()` → Parses subcommand and args → Builds manifest once via `build_port_manifest()` |
 
-- File: src/runtime.py
-- Function: PortRuntime.route_prompt
+---
+
+### Step 2 — Subcommand Dispatch
+
+| | |
+|---|---|
+| **File** | `src/main.py` |
+| **Function** | `main(argv)` |
+
+**Dispatch examples:**
+
+| Subcommand | Handler |
+|------------|---------|
+| `summary` | `QueryEnginePort(manifest).render_summary()` |
+| `manifest` | `manifest.to_markdown()` |
+| `commands` / `tools` | `get_commands` / `get_tools` or render indexes |
+| `route` | `PortRuntime().route_prompt(...)` |
+| `bootstrap` | `PortRuntime().bootstrap_session(...)` |
+| `turn-loop` | `PortRuntime().run_turn_loop(...)` |
+| `exec-command` / `exec-tool` | `execute_command` / `execute_tool` |
+| `setup-report` | `run_setup()` |
+| `command-graph` | `build_command_graph()` |
+| `tool-pool` | `assemble_tool_pool()` |
+
+---
+
+### Step 3 — Prompt Routing (Matching)
+
+| | |
+|---|---|
+| **File** | `src/runtime.py` |
+| **Function** | `PortRuntime.route_prompt` |
 
 **Tokenization and Selection Heuristic:**
 ```python
@@ -63,28 +80,37 @@ def route_prompt(self, prompt: str, limit: int = 5) -> list[RoutedMatch]:
     return selected[:limit]
 ```
 
-**What it does:** Tokenizes the prompt by lowercasing and normalizing "/" and "-" into spaces, then scores all commands and tools separately. Selection is biased toward diversity: one top command + one top tool, then filling remaining slots by global score.
+> **What it does:** Tokenizes the prompt by lowercasing and normalizing "/" and "-" into spaces, then scores all commands and tools separately. Selection is biased toward diversity: one top command + one top tool, then filling remaining slots by global score.
+>
+> **Why it matters:** Ensures results are diverse (no single kind dominates) while still favoring higher-scoring matches. A user asking for "lint import issues" gets both a linting command and an import analysis tool, not five variants of the same tool.
+>
+> **Key insight:** Selection order encodes a design preference — user queries benefit from multiple competencies, not redundancy. This is why the algorithm picks across kinds before pure score sorting.
 
-**Why it matters:** Ensures results are diverse (no single kind dominates) while still favoring higher-scoring matches. A user asking for "lint import issues" gets both a linting command and an import analysis tool, not five variants of the same tool.
+---
 
-**Key insight:** Selection order encodes a design preference: user queries benefit from multiple competencies, not redundancy. This is why the algorithm picks across kinds before pure score sorting.
+### Step 4 — Bootstrap Session Composition
 
-### Step 4: Bootstrap session composition
+| | |
+|---|---|
+| **File** | `src/runtime.py` |
+| **Function** | `PortRuntime.bootstrap_session` |
 
-- File: src/runtime.py
-- Function: PortRuntime.bootstrap_session
-- Action:
-  - Build context via build_port_context() from src/context.py
-  - Build setup report via run_setup(trusted=True) from src/setup.py
-  - Build system init summary via build_system_init_message() from src/system_init.py
-  - Build execution registry via build_execution_registry() from src/execution_registry.py
-  - Execute matched command/tool wrappers (mirrored stubs)
-  - Infer denials for bash-like tool names via _infer_permission_denials
+**Actions:**
+1. Build context via `build_port_context()` from `src/context.py`
+2. Build setup report via `run_setup(trusted=True)` from `src/setup.py`
+3. Build system init summary via `build_system_init_message()` from `src/system_init.py`
+4. Build execution registry via `build_execution_registry()` from `src/execution_registry.py`
+5. Execute matched command/tool wrappers (mirrored stubs)
+6. Infer denials for bash-like tool names via `_infer_permission_denials`
 
-### Step 5: Turn simulation and stream events
+---
 
-- File: src/query_engine.py
-- Functions: QueryEnginePort.stream_submit_message, QueryEnginePort.submit_message
+### Step 5 — Turn Simulation and Stream Events
+
+| | |
+|---|---|
+| **File** | `src/query_engine.py` |
+| **Functions** | `QueryEnginePort.stream_submit_message`, `QueryEnginePort.submit_message` |
 
 **Bounded Turn Execution:**
 ```python
@@ -125,103 +151,135 @@ def submit_message(self, prompt: str, matched_commands=(), matched_tools=(), den
     return TurnResult(prompt=prompt, output=output, ..., stop_reason=stop_reason)
 ```
 
-**What it does:** Checks hard stops (max_turns, max_budget) before executing a turn. If gates pass, constructs a summary output, records the message, and returns a TurnResult with stop_reason indicating whether the session should continue.
+> **What it does:** Checks hard stops (`max_turns`, `max_budget`) before executing a turn. If gates pass, constructs a summary output, records the message, and returns a `TurnResult` with `stop_reason` indicating whether the session should continue.
+>
+> **Why it matters:** Prevents runaway sessions from consuming unlimited API calls or hitting policy limits. Callers inspect `stop_reason` to decide whether to halt iteration.
+>
+> **Key insight:** Both gates are evaluated synchronously in one function call. There is no separate "budget check" phase — the yes/no decision is immediate and transparent to the caller.
 
-**Why it matters:** Prevents runaway sessions from consuming unlimited API calls or hitting policy limits. Callers inspect stop_reason to decide whether to halt iteration.
+---
 
-**Key insight:** Both gates are evaluated synchronously in one function call. There is no separate "budget check" phase—the yes/no decision is immediate and transparent to the caller.
+### Step 6 — Transcript/Session Persistence
 
-### Step 6: Transcript/session persistence
+| | |
+|---|---|
+| **File** | `src/query_engine.py` |
+| **Function** | `persist_session` |
+| **Uses** | `src/transcript.py` (flush/compact/replay) → `src/session_store.py` → `.port_sessions/<session_id>.json` |
 
-- File: src/query_engine.py
-- Function: persist_session
-- Uses:
-  - src/transcript.py (flush/compact/replay)
-  - src/session_store.py (save_session -> .port_sessions/<session_id>.json)
+---
 
-### Step 7: CLI result rendering
+### Step 7 — CLI Result Rendering
 
-- File: src/main.py
-- Function: main
-- Action:
-  - Prints markdown/text rows depending on command
-  - Returns process code 0/1/2
+| | |
+|---|---|
+| **File** | `src/main.py` |
+| **Function** | `main` |
+| **Actions** | Prints markdown/text rows depending on command → Returns process code `0` / `1` / `2` |
 
-## 3) Alternative Flows
+---
 
-### 3.1 turn-loop path
+## 3 · Alternative Flows
 
-- File: src/runtime.py
-- Function: run_turn_loop
-- Behavior:
-  - Reuses one QueryEnginePort
-  - Repeats submit_message up to max_turns
-  - Stops early if stop_reason != completed
+### 3.1 · `turn-loop` Path
 
-### 3.2 load-session path
+| | |
+|---|---|
+| **File** | `src/runtime.py` |
+| **Function** | `run_turn_loop` |
+| **Behavior** | Reuses one `QueryEnginePort`; repeats `submit_message` up to `max_turns`; stops early if `stop_reason != completed` |
 
-- File: src/main.py -> load_session subcommand
-- File: src/session_store.py -> load_session
-- Behavior:
-  - Reads persisted JSON session
-  - Prints session id, message count, token totals
+---
 
-### 3.3 remote/ssh/teleport/direct/deep-link paths
+### 3.2 · `load-session` Path
 
-- Files: src/remote_runtime.py, src/direct_modes.py
-- Behavior:
-  - Return mode report placeholders
-  - No network/session orchestration implemented in Python mirror
+| | |
+|---|---|
+| **Files** | `src/main.py` → `load_session` subcommand; `src/session_store.py` → `load_session` |
+| **Behavior** | Reads persisted JSON session; prints session id, message count, token totals |
 
-## 4) Rust Runtime Flow (Operational Surface)
+---
 
-This is the concrete high-level flow in Rust CLI.
+### 3.3 · Remote/SSH/Teleport/Direct/Deep-Link Paths
 
-1. rust/crates/claw-cli/src/main.rs: main -> run parses CLI action.
-2. Prompt/repl actions construct LiveCli and runtime dependencies.
-3. rust/crates/runtime/src/conversation.rs: ConversationRuntime.run_turn pushes user message.
-4. API stream events are converted into assistant message blocks (build_assistant_message).
+| | |
+|---|---|
+| **Files** | `src/remote_runtime.py`, `src/direct_modes.py` |
+| **Behavior** | Return mode report placeholders — no network/session orchestration implemented in Python mirror |
+
+---
+
+## 4 · Rust Runtime Flow (Operational Surface)
+
+```
+1. rust/crates/claw-cli/src/main.rs
+   main → run parses CLI action
+        │
+        ▼
+2. Prompt/repl actions construct LiveCli and runtime dependencies
+        │
+        ▼
+3. rust/crates/runtime/src/conversation.rs
+   ConversationRuntime.run_turn pushes user message
+        │
+        ▼
+4. API stream events → assistant message blocks (build_assistant_message)
+        │
+        ▼
 5. For each tool_use block:
-   - authorize via PermissionPolicy.authorize (permissions.rs)
-   - run pre-hook HookRunner.run_pre_tool_use (hooks.rs)
-   - execute tool via ToolExecutor.execute
-   - run post-hook HookRunner.run_post_tool_use
-   - append tool_result message to session
-6. Loop continues until no pending tool uses.
-7. Returns TurnSummary with usage/iterations.
+   ├─► authorize via PermissionPolicy.authorize (permissions.rs)
+   ├─► run pre-hook HookRunner.run_pre_tool_use (hooks.rs)
+   ├─► execute tool via ToolExecutor.execute
+   ├─► run post-hook HookRunner.run_post_tool_use
+   └─► append tool_result message to session
+        │
+        ▼
+6. Loop continues until no pending tool uses
+        │
+        ▼
+7. Returns TurnSummary with usage/iterations
+```
 
-## 5) Where Key Logic Happens (Not Just Definitions)
+---
 
-- Python routing decision: src/runtime.py (_score + route_prompt selection order)
-- Python stop conditions: src/query_engine.py (max turns, max budget)
-- Python persistence state transitions: src/query_engine.py + src/transcript.py + src/session_store.py
-- Rust permission escalation: rust/crates/runtime/src/permissions.rs (authorize)
-- Rust hook-deny behavior: rust/crates/runtime/src/hooks.rs and rust/crates/runtime/src/conversation.rs
-- Rust loop termination: rust/crates/runtime/src/conversation.rs (break when no tool uses)
+## 5 · Where Key Logic Happens (Not Just Definitions)
 
-## 6) Unclear Areas (Explicit)
+| Decision | Location |
+|----------|----------|
+| Python routing decision | `src/runtime.py` (`_score` + `route_prompt` selection order) |
+| Python stop conditions | `src/query_engine.py` (max turns, max budget) |
+| Python persistence state transitions | `src/query_engine.py` + `src/transcript.py` + `src/session_store.py` |
+| Rust permission escalation | `rust/crates/runtime/src/permissions.rs` (`authorize`) |
+| Rust hook-deny behavior | `rust/crates/runtime/src/hooks.rs` + `conversation.rs` |
+| Rust loop termination | `rust/crates/runtime/src/conversation.rs` (break when no tool uses) |
+
+---
+
+## 6 · Unclear Areas (Explicit)
 
 - Python mirror models flow and metadata but does not implement full external side effects for tools/remote modes.
 - Relationship between Python turn-loop semantics and Rust turn-loop semantics is conceptually similar but not strict behavioral parity.
 
-## Key Takeaways
+---
 
-1. **Single dispatch funnel:** All CLI subcommands start in main(), parse args, build the manifest once, then branch to specific handlers. This avoids redundant initialization.
+## 📌 Key Takeaways
 
-2. **Routing is greedy but diverse:** route_prompt balances relevance (token-overlap scoring) with diversity (one top command + one top tool before filling slots by score).
+1. **Single dispatch funnel** — All CLI subcommands start in `main()`, parse args, build the manifest once, then branch to specific handlers. This avoids redundant initialization.
 
-3. **Turn gating is synchronous:** max_turns and max_budget checks happen in submit_message at call time. The caller always gets an immediate yes/no with a clear stop_reason.
+2. **Routing is greedy but diverse** — `route_prompt` balances relevance (token-overlap scoring) with diversity (one top command + one top tool before filling slots by score).
 
-4. **Transcript compaction is automatic:** Every turn submission triggers a check for history overflow. If the message list exceeds threshold, compact_messages_if_needed shrinks it.
+3. **Turn gating is synchronous** — `max_turns` and `max_budget` checks happen in `submit_message` at call time. The caller always gets an immediate yes/no with a clear `stop_reason`.
 
-5. **Session durability happens implicitly:** Callers don't have to manually save sessions. QueryEnginePort tracks this state internally and provides persist_session() as a convenience method.
+4. **Transcript compaction is automatic** — Every turn submission triggers a check for history overflow. If the message list exceeds threshold, `compact_messages_if_needed` shrinks it.
 
-6. **Rust loop is tool-driven:** The Rust runtime keeps iterating as long as the assistant emits pending_tool_uses. Python does the same conceptually.
+5. **Session durability happens implicitly** — Callers don't have to manually save sessions. `QueryEnginePort` tracks this state internally and provides `persist_session()` as a convenience method.
+
+6. **Rust loop is tool-driven** — The Rust runtime keeps iterating as long as the assistant emits `pending_tool_uses`. Python does the same conceptually.
 
 ---
 
-**Previous:** [ARCHITECTURE.md](ARCHITECTURE.md) — Repository structure and module relationships.
+**← Previous:** [ARCHITECTURE.md](ARCHITECTURE.md) — Repository structure and module relationships.
 
-**Next:** [DECISION_ENGINE.md](DECISION_ENGINE.md) — Matching, scoring, and authorization decisions.
+**Next →** [DECISION_ENGINE.md](DECISION_ENGINE.md) — Matching, scoring, and authorization decisions.
 
-**Up:** [Index](../README.md)
+**↑ Up:** [Index](../README.md)
